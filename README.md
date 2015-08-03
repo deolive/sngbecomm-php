@@ -10,9 +10,12 @@
  
 Надо подключить модуль
 
+```
+   $ composer require sngbecomm-php 
+```
 
 ```php
-  require_once("/path/to/sngbecomm-php/lib/SNGBEcomm.php");
+  require_once("vendor/autoload.php");
 ```
     
 ###Быстрый старт:
@@ -21,30 +24,29 @@
 Также в личном кабинете можно посмотреть свой terminal id и alias
 
 ```php
-  SNGBEcomm::setApiKey('sdfkjhb23y82ybvybvkwubyv28'); // PSK
-  SNGBEcomm::setMerchant('7000'); // terminal id 
-  SNGBEcomm::setTerminalAlias('7000-alias'); // terminal-alias
+    $sngb = new SNGBEcomm('sdfkjhb23y82ybvybvkwubyv28', '7000', '7000-alias', true);
 ```
  
 Получить url, платежной страницы банка, на которую надо перенаправить пользователя.
 
 ```php
-  $payment = new SNGBEcomm_Payment();
-  //trackid – это ваш id операции платежа,
-  //Amount это цена. Цену надо передавать в минимальных единицах валюты.(копейках). Фиксированная запятая. 2 знака после запятой. Это стандарт хранения денег в БД.
-  $additional_fields = array(
-  // Номер заказа
-  "udf1" => $id,
-  // Наш номер тех. поддержки
-  "udf2" => "8 800 xxx xxx 88"
-  );
-  $url = $payment->create($trackid, $amount, $additional_fields);
+    
+    //trackid – это ваш id операции платежа,
+    //Amount это цена
+    $additional_fields = array(
+    // Номер заказа
+    "udf1" => $id,
+    // Наш номер тех. поддержки
+    "udf2" => "8 800 xxx xxx 88"
+    );
+    $payment = $sngb->createPayment($trackId, $amount, Payment::$PURCHASE);
+    $url = $payment->init($additional_fields);
 ```
  
 Чтобы перейти на боевой сервер:
 
 ```php
-  SNGBEcomm::setLiveMode(true);
+  $sngb->setLiveMode(true);
 ```
  
 
@@ -52,44 +54,44 @@
 
   ($error – это сообщение об ошибке, которое приходит на notification url)
 ```php
-  $errorhandler = new SNGBEcomm_Error($error, $result, $responsecode, $hashresponse);
-  $errormessage = $errorhandler->isError($trackid, $amount, $action);
+    $errormessage = $payment->isError($error, $result, $responsecode, $hashresponse); // переменные полученные из запроса
 ```
  
-$errormessage если пустой, то все замечательно!
+`$errormessage` если пустой, то все замечательно.
 Если нет, то он хранит текст сообщение об ошибке.
 
 ### Notification callback
 Создайте notification url в личном кабинете (callback от нашего сервиса после попытки оплаты клиента на платежной странице банка на ваш сервер)
 
-Пример скрипта notification.php
+Пример
 ```php
-  $request = $app->request;
 
-  $trackid = $request->params("trackid");
+    $request = $app->request;
 
-  // Получаем из бд нужную операцию платежа,
-  // если конечно у нас есть trackid
-  $payment_object = R::load('payment', $trackid);
-  $action = $payment_object->action;
-  $amount = $payment_object->amount;
+    $trackid = $request->params("trackid");
 
-  $error = $request->params('Error');
-  $result = $request->params('result');
-  $responsecode = $request->params('responsecode');
-  $hashresponse = $request->params('udf5');
+    // Получаем из бд нужную операцию платежа,
+    // если конечно у нас есть trackid
+    $payment_object = R::load('payment', $trackid);
+    $action = $payment_object->action;
+    $amount = $payment_object->amount;
 
-  $errorhandler = new SNGBEcomm_Error($error, $result, $responsecode, $hashresponse);
-  $errormessage = $errorhandler->isError($trackid, $amount, $action);
+    $error = $request->params('Error');
+    $result = $request->params('result');
+    $responsecode = $request->params('responsecode');
+    $hashresponse = $request->params('udf5');
 
-  $log = $app->getLog();
-  $log->info("REQUEST BODY: " . $request->getBody());
-  if ($errormessage) {
-    $reply = 'REDIRECT=' . $rootURL . '/payment/error?trackid=' . $trackid . '&errormessage=' .urlencode($errormessage);
-  }
-  else {
-    $reply = 'REDIRECT=' . $rootURL . '/payment/success/' . $trackid;
-  }
+    $payment = $sngb->createPayment($trackId, $amount, $action);
+    $errormessage = $payment->isError($error, $result, $responsecode, $hashresponse);
+
+    $log = $app->getLog();
+    $log->info("REQUEST BODY: " . $request->getBody());
+    if ($errormessage) {
+        // TODO обработать ошибку
+    }
+    else {
+        // TODO обработать успешный результат
+    }
 ```
 
 Это базовое использование.
